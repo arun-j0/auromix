@@ -24,11 +24,16 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ArrowLeft, Loader2, Plus, X } from "lucide-react";
-import { createUser } from "@/lib/users";
-import { getAgents, type User } from "@/lib/users";
-import { notifyUserCreated } from "@/lib/notifications";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
+
+// Import server actions and types
+import {
+  createUserAction,
+  getAgentsAction,
+  sendWelcomeNotification,
+} from "@/lib/actions/user-actions";
+import { User } from "@/lib/users";
 
 export default function NewUserPage() {
   const [loading, setLoading] = useState(false);
@@ -54,8 +59,12 @@ export default function NewUserPage() {
 
   const loadAgents = async () => {
     try {
-      const agentsData = await getAgents();
-      setAgents(agentsData);
+      const result = await getAgentsAction();
+      if (result.success) {
+        setAgents(result.data);
+      } else {
+        console.error("Error loading agents:", result.error);
+      }
     } catch (error) {
       console.error("Error loading agents:", error);
     }
@@ -86,16 +95,22 @@ export default function NewUserPage() {
         throw new Error("Please select a role");
       }
 
+      // Prepare user data for server action
       const userData: any = {
         email: formData.email,
         password: formData.password,
         name: formData.name,
         role: formData.role,
+        isActive: formData.isActive,
       };
 
       // Only add optional fields if they have values
       if (formData.phone && formData.phone.trim() !== "") {
-        userData.phone = formData.phone.trim();
+        let phone = formData.phone.trim();
+        if (!phone.startsWith("+")) {
+          phone = "+91" + phone; // assuming India; adjust as needed
+        }
+        userData.phone = phone;
       }
 
       if (formData.skills.length > 0) {
@@ -106,27 +121,33 @@ export default function NewUserPage() {
       if (
         formData.role === "employee" &&
         formData.agentId &&
-        formData.agentId !== ""
+        formData.agentId !== "" &&
+        formData.agentId !== "none"
       ) {
         userData.agentId = formData.agentId;
       }
 
-      const newUser = await createUser(userData);
+      // Create user using server action
+      const result = await createUserAction(userData);
 
-      // Send welcome notification to the new user
-      await notifyUserCreated(newUser.uid, {
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+
+      // Send welcome notification
+      await sendWelcomeNotification(result.uid, {
         role: formData.role,
         name: formData.name,
       });
 
-      router.back();
-
+      // Show success message
       toast({
         title: "User Created Successfully!",
         description: `${formData.name} has been added as a ${formData.role}.`,
       });
 
-      resetForm();
+      // Navigate back to users page
+      router.push("/admin/users");
     } catch (error: any) {
       setError(error.message);
     } finally {
