@@ -1,53 +1,59 @@
-"use client"
+"use client";
 
-import type React from "react"
+import type React from "react";
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, ArrowLeft } from "lucide-react"
-import { loginUser } from "@/lib/auth"
-import Link from "next/link"
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Loader2, ArrowLeft } from "lucide-react";
+import { loginUser } from "@/lib/auth";
+import Link from "next/link";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState("")
-  const router = useRouter()
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const router = useRouter();
 
   const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    setError("")
+    e.preventDefault();
+    setLoading(true);
+    setError("");
 
     try {
-      const { userData } = await loginUser(email, password)
+      const { userData } = await loginUser(email, password);
 
       // Redirect based on role
       switch (userData.role) {
         case "admin":
-          router.push("/admin/dashboard")
-          break
+          router.push("/admin/dashboard");
+          break;
         case "agent":
-          router.push("/agent/dashboard")
-          break
+          router.push("/agent/dashboard");
+          break;
         case "employee":
-          router.push("/employee/dashboard")
-          break
+          router.push("/employee/dashboard");
+          break;
         default:
-          setError("Invalid user role")
+          setError("Invalid user role");
       }
     } catch (error: any) {
-      setError(error.message)
+      setError(error.message);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
@@ -61,7 +67,9 @@ export default function LoginPage() {
             </Link>
             <div>
               <CardTitle>Login to Auromix</CardTitle>
-              <CardDescription>Enter your credentials to continue</CardDescription>
+              <CardDescription>
+                Enter your credentials to continue
+              </CardDescription>
             </div>
           </div>
         </CardHeader>
@@ -106,19 +114,16 @@ export default function LoginPage() {
           <div className="mt-4 text-center">
             <p className="text-sm text-gray-600">
               Don't have an account?{" "}
-              <Link href="/auth/signup" className="text-blue-600 hover:underline">
+              <Link
+                href="/auth/signup"
+                className="text-blue-600 hover:underline"
+              >
                 Sign up
               </Link>
             </p>
           </div>
-
-          <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-            <p className="text-xs text-gray-600 font-medium">Default Admin Account:</p>
-            <p className="text-xs text-gray-500">Email: arun2310kumar2002@gmail.com</p>
-            <p className="text-xs text-gray-500">Password: auromix@admin</p>
-          </div>
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }

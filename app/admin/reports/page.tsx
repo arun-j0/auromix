@@ -1,44 +1,53 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
-import { auth, db } from "@/lib/firebase"
-import { onAuthStateChanged } from "firebase/auth"
-import { doc, getDoc, collection, getDocs } from "firebase/firestore"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Header } from "@/components/layout/header"
-import { Download, TrendingUp, Users, Package, Clock } from "lucide-react"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { auth, db } from "@/lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
+import { doc, getDoc, collection, getDocs } from "firebase/firestore";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Header } from "@/components/layout/header";
+import { Download, TrendingUp, Users, Package, Clock } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { getAllUsers } from "@/lib/users";
+import { getAllCompanies } from "@/lib/companies";
+import { getAllOrders } from "@/lib/orders";
 
 interface ReportData {
-  totalOrders: number
-  completedOrders: number
-  pendingOrders: number
-  totalUsers: number
-  activeUsers: number
-  totalCompanies: number
-  activeCompanies: number
-  averageCompletionTime: number
+  totalOrders: number;
+  completedOrders: number;
+  pendingOrders: number;
+  totalUsers: number;
+  activeUsers: number;
+  totalCompanies: number;
+  activeCompanies: number;
+  averageCompletionTime: number;
   topPerformers: Array<{
-    name: string
-    completedTasks: number
-    role: string
-  }>
+    name: string;
+    completedTasks: number;
+    role: string;
+  }>;
   ordersByStatus: Array<{
-    status: string
-    count: number
-  }>
+    status: string;
+    count: number;
+  }>;
   monthlyTrends: Array<{
-    month: string
-    orders: number
-    completed: number
-  }>
+    month: string;
+    orders: number;
+    completed: number;
+  }>;
 }
 
 export default function ReportsPage() {
-  const [user, setUser] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
+  const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
   const [reportData, setReportData] = useState<ReportData>({
     totalOrders: 0,
     completedOrders: 0,
@@ -51,64 +60,63 @@ export default function ReportsPage() {
     topPerformers: [],
     ordersByStatus: [],
     monthlyTrends: [],
-  })
-  const router = useRouter()
+  });
+  const router = useRouter();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        const userDoc = await getDoc(doc(db, "users", firebaseUser.uid))
+        const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
         if (userDoc.exists()) {
-          const userData = userDoc.data()
+          const userData = userDoc.data();
           if (userData.role !== "admin") {
-            router.push("/")
-            return
+            router.push("/");
+            return;
           }
-          setUser({ ...firebaseUser, ...userData })
-          await loadReportData()
+          setUser({ ...firebaseUser, ...userData });
+          await loadReportData();
         }
       } else {
-        router.push("/auth/login")
+        router.push("/auth/login");
       }
-      setLoading(false)
-    })
+      setLoading(false);
+    });
 
-    return () => unsubscribe()
-  }, [router])
+    return () => unsubscribe();
+  }, [router]);
 
   const loadReportData = async () => {
     try {
       // Load orders
-      const ordersSnapshot = await getDocs(collection(db, "orders"))
-      const orders = ordersSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
-
+      const orders = await getAllOrders();
       // Load users
-      const usersSnapshot = await getDocs(collection(db, "users"))
-      const users = usersSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
+      const users = await getAllUsers();
 
       // Load companies
-      const companiesSnapshot = await getDocs(collection(db, "companies"))
-      const companies = companiesSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
+      const companies = await getAllCompanies();
 
       // Calculate metrics
-      const completedOrders = orders.filter((order) => order.status === "completed" || order.status === "delivered")
-      const pendingOrders = orders.filter((order) => order.status === "pending" || order.status === "in_progress")
-      const activeUsers = users.filter((user) => user.isActive)
-      const activeCompanies = companies.filter((company) => company.isActive)
+      const completedOrders = orders.filter(
+        (order) => order.status === "completed" || order.status === "delivered"
+      );
+      const pendingOrders = orders.filter(
+        (order) => order.status === "pending" || order.status === "in_progress"
+      );
+      const activeUsers = users.filter((user) => user.isActive);
+      const activeCompanies = companies.filter((company) => company.isActive);
 
       // Calculate order status distribution
-      const statusCounts = orders.reduce(
-        (acc, order) => {
-          acc[order.status] = (acc[order.status] || 0) + 1
-          return acc
-        },
-        {} as Record<string, number>,
-      )
+      const statusCounts = orders.reduce((acc, order) => {
+        acc[order.status] = (acc[order.status] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
 
-      const ordersByStatus = Object.entries(statusCounts).map(([status, count]) => ({
-        status: status.replace("_", " ").toUpperCase(),
-        count,
-      }))
+      const ordersByStatus = Object.entries(statusCounts).map(
+        ([status, count]) => ({
+          status: status.replace("_", " ").toUpperCase(),
+          count,
+        })
+      );
 
       // Generate mock monthly trends (in real app, this would be calculated from actual data)
       const monthlyTrends = [
@@ -117,8 +125,12 @@ export default function ReportsPage() {
         { month: "Mar", orders: 25, completed: 22 },
         { month: "Apr", orders: 30, completed: 28 },
         { month: "May", orders: 35, completed: 32 },
-        { month: "Jun", orders: orders.length, completed: completedOrders.length },
-      ]
+        {
+          month: "Jun",
+          orders: orders.length,
+          completed: completedOrders.length,
+        },
+      ];
 
       // Generate top performers (mock data - in real app, calculate from assignments)
       const topPerformers = users
@@ -129,7 +141,7 @@ export default function ReportsPage() {
           completedTasks: Math.floor(Math.random() * 20) + 5,
           role: user.role,
         }))
-        .sort((a, b) => b.completedTasks - a.completedTasks)
+        .sort((a, b) => b.completedTasks - a.completedTasks);
 
       setReportData({
         totalOrders: orders.length,
@@ -143,16 +155,16 @@ export default function ReportsPage() {
         topPerformers,
         ordersByStatus,
         monthlyTrends,
-      })
+      });
     } catch (error) {
-      console.error("Error loading report data:", error)
+      console.error("Error loading report data:", error);
     }
-  }
+  };
 
   const exportReport = (type: string) => {
     // Mock export functionality
-    alert(`Exporting ${type} report... (Feature coming soon)`)
-  }
+    alert(`Exporting ${type} report... (Feature coming soon)`);
+  };
 
   if (loading) {
     return (
@@ -162,11 +174,11 @@ export default function ReportsPage() {
           <p className="mt-4 text-gray-600">Loading reports...</p>
         </div>
       </div>
-    )
+    );
   }
 
   if (!user) {
-    return null
+    return null;
   }
 
   return (
@@ -176,15 +188,27 @@ export default function ReportsPage() {
       <main className="container mx-auto px-6 py-8">
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Reports & Analytics</h1>
-            <p className="text-gray-600">Business insights and performance metrics</p>
+            <h1 className="text-3xl font-bold text-gray-900">
+              Reports & Analytics
+            </h1>
+            <p className="text-gray-600">
+              Business insights and performance metrics
+            </p>
           </div>
           <div className="flex gap-2">
-            <Button onClick={() => exportReport("PDF")} variant="outline" className="bg-white">
+            <Button
+              onClick={() => exportReport("PDF")}
+              variant="outline"
+              className="bg-white"
+            >
               <Download className="mr-2 h-4 w-4" />
               Export PDF
             </Button>
-            <Button onClick={() => exportReport("Excel")} variant="outline" className="bg-white">
+            <Button
+              onClick={() => exportReport("Excel")}
+              variant="outline"
+              className="bg-white"
+            >
               <Download className="mr-2 h-4 w-4" />
               Export Excel
             </Button>
@@ -197,8 +221,12 @@ export default function ReportsPage() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Total Orders</p>
-                  <p className="text-3xl font-bold text-gray-900">{reportData.totalOrders}</p>
+                  <p className="text-sm font-medium text-gray-600">
+                    Total Orders
+                  </p>
+                  <p className="text-3xl font-bold text-gray-900">
+                    {reportData.totalOrders}
+                  </p>
                   <p className="text-sm text-green-600">+12% from last month</p>
                 </div>
                 <Package className="h-8 w-8 text-blue-600" />
@@ -210,11 +238,19 @@ export default function ReportsPage() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Completed Orders</p>
-                  <p className="text-3xl font-bold text-gray-900">{reportData.completedOrders}</p>
+                  <p className="text-sm font-medium text-gray-600">
+                    Completed Orders
+                  </p>
+                  <p className="text-3xl font-bold text-gray-900">
+                    {reportData.completedOrders}
+                  </p>
                   <p className="text-sm text-green-600">
                     {reportData.totalOrders > 0
-                      ? Math.round((reportData.completedOrders / reportData.totalOrders) * 100)
+                      ? Math.round(
+                          (reportData.completedOrders /
+                            reportData.totalOrders) *
+                            100
+                        )
                       : 0}
                     % completion rate
                   </p>
@@ -228,9 +264,15 @@ export default function ReportsPage() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Active Users</p>
-                  <p className="text-3xl font-bold text-gray-900">{reportData.activeUsers}</p>
-                  <p className="text-sm text-gray-600">of {reportData.totalUsers} total</p>
+                  <p className="text-sm font-medium text-gray-600">
+                    Active Users
+                  </p>
+                  <p className="text-3xl font-bold text-gray-900">
+                    {reportData.activeUsers}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    of {reportData.totalUsers} total
+                  </p>
                 </div>
                 <Users className="h-8 w-8 text-purple-600" />
               </div>
@@ -241,8 +283,12 @@ export default function ReportsPage() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Avg. Completion</p>
-                  <p className="text-3xl font-bold text-gray-900">{reportData.averageCompletionTime}</p>
+                  <p className="text-sm font-medium text-gray-600">
+                    Avg. Completion
+                  </p>
+                  <p className="text-3xl font-bold text-gray-900">
+                    {reportData.averageCompletionTime}
+                  </p>
                   <p className="text-sm text-gray-600">days per order</p>
                 </div>
                 <Clock className="h-8 w-8 text-orange-600" />
@@ -254,16 +300,28 @@ export default function ReportsPage() {
         {/* Detailed Reports */}
         <Tabs defaultValue="overview" className="space-y-6">
           <TabsList className="grid w-full grid-cols-4 bg-white">
-            <TabsTrigger value="overview" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">
+            <TabsTrigger
+              value="overview"
+              className="data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+            >
               Overview
             </TabsTrigger>
-            <TabsTrigger value="orders" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">
+            <TabsTrigger
+              value="orders"
+              className="data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+            >
               Orders
             </TabsTrigger>
-            <TabsTrigger value="performance" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">
+            <TabsTrigger
+              value="performance"
+              className="data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+            >
               Performance
             </TabsTrigger>
-            <TabsTrigger value="trends" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">
+            <TabsTrigger
+              value="trends"
+              className="data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+            >
               Trends
             </TabsTrigger>
           </TabsList>
@@ -273,23 +331,34 @@ export default function ReportsPage() {
               <Card className="bg-white">
                 <CardHeader>
                   <CardTitle>Order Status Distribution</CardTitle>
-                  <CardDescription>Current status of all orders</CardDescription>
+                  <CardDescription>
+                    Current status of all orders
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
                     {reportData.ordersByStatus.map((item, index) => (
-                      <div key={index} className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-gray-700">{item.status}</span>
+                      <div
+                        key={index}
+                        className="flex items-center justify-between"
+                      >
+                        <span className="text-sm font-medium text-gray-700">
+                          {item.status}
+                        </span>
                         <div className="flex items-center gap-2">
                           <div className="w-32 bg-gray-200 rounded-full h-2">
                             <div
                               className="bg-blue-600 h-2 rounded-full"
                               style={{
-                                width: `${(item.count / reportData.totalOrders) * 100}%`,
+                                width: `${
+                                  (item.count / reportData.totalOrders) * 100
+                                }%`,
                               }}
                             ></div>
                           </div>
-                          <span className="text-sm text-gray-600 w-8">{item.count}</span>
+                          <span className="text-sm text-gray-600 w-8">
+                            {item.count}
+                          </span>
                         </div>
                       </div>
                     ))}
@@ -300,18 +369,29 @@ export default function ReportsPage() {
               <Card className="bg-white">
                 <CardHeader>
                   <CardTitle>Top Performers</CardTitle>
-                  <CardDescription>Most productive team members</CardDescription>
+                  <CardDescription>
+                    Most productive team members
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
                     {reportData.topPerformers.map((performer, index) => (
-                      <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <div
+                        key={index}
+                        className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                      >
                         <div>
-                          <p className="font-medium text-gray-900">{performer.name}</p>
-                          <p className="text-sm text-gray-600 capitalize">{performer.role}</p>
+                          <p className="font-medium text-gray-900">
+                            {performer.name}
+                          </p>
+                          <p className="text-sm text-gray-600 capitalize">
+                            {performer.role}
+                          </p>
                         </div>
                         <div className="text-right">
-                          <p className="font-bold text-blue-600">{performer.completedTasks}</p>
+                          <p className="font-bold text-blue-600">
+                            {performer.completedTasks}
+                          </p>
                           <p className="text-xs text-gray-500">completed</p>
                         </div>
                       </div>
@@ -326,23 +406,31 @@ export default function ReportsPage() {
             <Card className="bg-white">
               <CardHeader>
                 <CardTitle>Order Analytics</CardTitle>
-                <CardDescription>Detailed order statistics and insights</CardDescription>
+                <CardDescription>
+                  Detailed order statistics and insights
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div className="text-center p-6 bg-blue-50 rounded-lg">
                     <Package className="h-12 w-12 text-blue-600 mx-auto mb-2" />
-                    <p className="text-2xl font-bold text-gray-900">{reportData.totalOrders}</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {reportData.totalOrders}
+                    </p>
                     <p className="text-sm text-gray-600">Total Orders</p>
                   </div>
                   <div className="text-center p-6 bg-green-50 rounded-lg">
                     <TrendingUp className="h-12 w-12 text-green-600 mx-auto mb-2" />
-                    <p className="text-2xl font-bold text-gray-900">{reportData.completedOrders}</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {reportData.completedOrders}
+                    </p>
                     <p className="text-sm text-gray-600">Completed</p>
                   </div>
                   <div className="text-center p-6 bg-orange-50 rounded-lg">
                     <Clock className="h-12 w-12 text-orange-600 mx-auto mb-2" />
-                    <p className="text-2xl font-bold text-gray-900">{reportData.pendingOrders}</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {reportData.pendingOrders}
+                    </p>
                     <p className="text-sm text-gray-600">In Progress</p>
                   </div>
                 </div>
@@ -354,16 +442,22 @@ export default function ReportsPage() {
             <Card className="bg-white">
               <CardHeader>
                 <CardTitle>Team Performance</CardTitle>
-                <CardDescription>Individual and team productivity metrics</CardDescription>
+                <CardDescription>
+                  Individual and team productivity metrics
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                      <h4 className="font-medium text-gray-900 mb-4">Completion Rate by Role</h4>
+                      <h4 className="font-medium text-gray-900 mb-4">
+                        Completion Rate by Role
+                      </h4>
                       <div className="space-y-3">
                         <div className="flex justify-between items-center">
-                          <span className="text-sm text-gray-600">Employees</span>
+                          <span className="text-sm text-gray-600">
+                            Employees
+                          </span>
                           <span className="text-sm font-medium">85%</span>
                         </div>
                         <div className="flex justify-between items-center">
@@ -373,14 +467,20 @@ export default function ReportsPage() {
                       </div>
                     </div>
                     <div>
-                      <h4 className="font-medium text-gray-900 mb-4">Average Response Time</h4>
+                      <h4 className="font-medium text-gray-900 mb-4">
+                        Average Response Time
+                      </h4>
                       <div className="space-y-3">
                         <div className="flex justify-between items-center">
-                          <span className="text-sm text-gray-600">Assignment to Start</span>
+                          <span className="text-sm text-gray-600">
+                            Assignment to Start
+                          </span>
                           <span className="text-sm font-medium">2.3 hours</span>
                         </div>
                         <div className="flex justify-between items-center">
-                          <span className="text-sm text-gray-600">Completion to Review</span>
+                          <span className="text-sm text-gray-600">
+                            Completion to Review
+                          </span>
                           <span className="text-sm font-medium">4.1 hours</span>
                         </div>
                       </div>
@@ -395,7 +495,9 @@ export default function ReportsPage() {
             <Card className="bg-white">
               <CardHeader>
                 <CardTitle>Monthly Trends</CardTitle>
-                <CardDescription>Order volume and completion trends over time</CardDescription>
+                <CardDescription>
+                  Order volume and completion trends over time
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-6">
@@ -406,16 +508,24 @@ export default function ReportsPage() {
                           <div className="h-20 bg-gray-100 rounded relative overflow-hidden">
                             <div
                               className="absolute bottom-0 left-0 right-0 bg-blue-600 rounded-b"
-                              style={{ height: `${(month.orders / 40) * 100}%` }}
+                              style={{
+                                height: `${(month.orders / 40) * 100}%`,
+                              }}
                             ></div>
                             <div
                               className="absolute bottom-0 left-0 right-0 bg-green-600 rounded-b"
-                              style={{ height: `${(month.completed / 40) * 100}%` }}
+                              style={{
+                                height: `${(month.completed / 40) * 100}%`,
+                              }}
                             ></div>
                           </div>
                         </div>
-                        <p className="text-xs font-medium text-gray-900">{month.month}</p>
-                        <p className="text-xs text-gray-600">{month.orders} orders</p>
+                        <p className="text-xs font-medium text-gray-900">
+                          {month.month}
+                        </p>
+                        <p className="text-xs text-gray-600">
+                          {month.orders} orders
+                        </p>
                       </div>
                     ))}
                   </div>
@@ -436,5 +546,5 @@ export default function ReportsPage() {
         </Tabs>
       </main>
     </div>
-  )
+  );
 }

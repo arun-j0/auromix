@@ -1,130 +1,212 @@
-import { db } from "./firebase"
-import { collection, doc, setDoc, getDocs, updateDoc, query, where, orderBy, Timestamp } from "firebase/firestore"
+import { db } from "./firebase";
+import {
+  collection,
+  doc,
+  setDoc,
+  getDocs,
+  updateDoc,
+  query,
+  where,
+  orderBy,
+  Timestamp,
+} from "firebase/firestore";
 
 export interface Notification {
-  id: string
-  userId: string
-  title: string
-  message: string
-  type: "info" | "success" | "warning" | "error"
-  isRead: boolean
-  createdAt: Date
-  data?: any
+  id: string;
+  userId: string;
+  title: string;
+  message: string;
+  type: "assignment" | "order" | "user" | "payment" | "delivery";
+  isRead: boolean;
+  createdAt: Date;
+  data?: any;
 }
 
-export const createNotification = async (notificationData: Omit<Notification, "id" | "createdAt">) => {
+export const createNotification = async (
+  notificationData: Omit<Notification, "id" | "createdAt">
+) => {
   try {
-    const notificationRef = doc(collection(db, "notifications"))
+    const notificationRef = doc(collection(db, "notifications"));
     const notification: Notification = {
       ...notificationData,
       id: notificationRef.id,
       createdAt: new Date(),
-    }
+    };
 
     await setDoc(notificationRef, {
       ...notification,
       createdAt: Timestamp.fromDate(notification.createdAt),
-    })
+    });
 
-    return notification
+    return notification;
   } catch (error: any) {
-    throw new Error(`Failed to create notification: ${error.message}`)
+    throw new Error(`Failed to create notification: ${error.message}`);
   }
-}
+};
 
-export const getUserNotifications = async (userId: string): Promise<Notification[]> => {
+export const getUserNotifications = async (
+  userId: string
+): Promise<Notification[]> => {
   try {
     const notificationsQuery = query(
       collection(db, "notifications"),
       where("userId", "==", userId),
-      orderBy("createdAt", "desc"),
-    )
-    const notificationsSnapshot = await getDocs(notificationsQuery)
+      orderBy("createdAt", "desc")
+    );
+    const notificationsSnapshot = await getDocs(notificationsQuery);
 
     return notificationsSnapshot.docs.map((doc) => {
-      const data = doc.data()
+      const data = doc.data();
       return {
         ...data,
         createdAt: data.createdAt?.toDate() || new Date(),
-      } as Notification
-    })
+      } as Notification;
+    });
   } catch (error: any) {
-    throw new Error(`Failed to get user notifications: ${error.message}`)
+    throw new Error(`Failed to get user notifications: ${error.message}`);
   }
-}
+};
 
 export const markNotificationAsRead = async (notificationId: string) => {
   try {
     await updateDoc(doc(db, "notifications", notificationId), {
       isRead: true,
-    })
+    });
   } catch (error: any) {
-    throw new Error(`Failed to mark notification as read: ${error.message}`)
+    throw new Error(`Failed to mark notification as read: ${error.message}`);
   }
-}
+};
 
-export const getUnreadNotificationCount = async (userId: string): Promise<number> => {
+export const getUnreadNotificationCount = async (
+  userId: string
+): Promise<number> => {
   try {
     const notificationsQuery = query(
       collection(db, "notifications"),
       where("userId", "==", userId),
-      where("isRead", "==", false),
-    )
-    const notificationsSnapshot = await getDocs(notificationsQuery)
-    return notificationsSnapshot.size
+      where("isRead", "==", false)
+    );
+    const notificationsSnapshot = await getDocs(notificationsQuery);
+    return notificationsSnapshot.size;
   } catch (error: any) {
-    console.error("Failed to get unread notification count:", error)
-    return 0
+    console.error("Failed to get unread notification count:", error);
+    return 0;
   }
-}
+};
 
 // Helper functions for specific notification types
-export const notifyUserCreated = async (userId: string, data: { role: string; name: string }) => {
+export const notifyUserCreated = async (
+  userId: string,
+  data: { role: string; name: string }
+) => {
   return createNotification({
     userId,
     title: "Welcome to Auromix!",
     message: `Your ${data.role} account has been created successfully. Welcome to the team!`,
-    type: "success",
+    type: "user",
     isRead: false,
     data,
-  })
-}
+  });
+};
 
 export const notifyOrderAssigned = async (
   userId: string,
-  data: { id: string; orderNumber: string; productName: string },
+  data: { id: string; orderNumber: string; productName: string }
 ) => {
   return createNotification({
     userId,
     title: "New Order Assigned",
-    message: `Order ${data.orderNumber} (${data.productName}) has been assigned to you.`,
-    type: "info",
+    message: `Order ${data.orderNumber} with product ${data.productName} has been assigned to you.`,
+    type: "order",
     isRead: false,
     data,
-  })
-}
+  });
+};
 
-export const notifyAssignmentApproved = async (userId: string, data: { assignmentId: string; productName: string }) => {
+export const notifyAssignmentCreated = async (
+  userId: string,
+  data: { assignmentId: string; productName: string; agentName: string }
+) => {
+  return createNotification({
+    userId,
+    title: "New Task Assigned",
+    message: `You have been assigned to work on ${data.productName} by ${data.agentName}.`,
+    type: "assignment",
+    isRead: false,
+    data,
+  });
+};
+
+export const notifyAssignmentApproved = async (
+  userId: string,
+  data: { assignmentId: string; productName: string }
+) => {
   return createNotification({
     userId,
     title: "Assignment Approved",
     message: `Your assignment for ${data.productName} has been approved and is ready to start.`,
-    type: "success",
+    type: "assignment",
     isRead: false,
     data,
-  })
-}
+  });
+};
 
 export const notifyAssignmentRejected = async (
   userId: string,
-  data: { assignmentId: string; productName: string; reason: string },
+  data: { assignmentId: string; productName: string; reason: string }
 ) => {
   return createNotification({
     userId,
     title: "Assignment Rejected",
     message: `Your assignment for ${data.productName} has been rejected. Reason: ${data.reason}`,
-    type: "error",
+    type: "assignment",
     isRead: false,
     data,
-  })
-}
+  });
+};
+
+export const notifyPaymentCreated = async (
+  userId: string,
+  data: { paymentId: string; amount: number; productName: string }
+) => {
+  return createNotification({
+    userId,
+    title: "Payment Created",
+    message: `A payment of $${data.amount.toFixed(
+      2
+    )} has been created for your completed work on ${data.productName}.`,
+    type: "payment",
+    isRead: false,
+    data,
+  });
+};
+
+export const notifyPaymentPaid = async (
+  userId: string,
+  data: { paymentId: string; amount: number; productName: string }
+) => {
+  return createNotification({
+    userId,
+    title: "Payment Processed",
+    message: `Your payment of $${data.amount.toFixed(2)} for ${
+      data.productName
+    } has been processed.`,
+    type: "payment",
+    isRead: false,
+    data,
+  });
+};
+
+export const notifyOrderDelivered = async (
+  userId: string,
+  data: { orderId: string; orderNumber: string; clientName: string }
+) => {
+  return createNotification({
+    userId,
+    title: "Order Delivered",
+    message: `Order ${data.orderNumber} has been successfully delivered to ${data.clientName}.`,
+    type: "delivery",
+    isRead: false,
+    data,
+  });
+};

@@ -24,8 +24,8 @@ import {
   Home,
   UserCheck,
   FileText,
+  DollarSign,
 } from "lucide-react";
-import { getUnreadNotificationCount } from "@/lib/notifications";
 
 interface HeaderProps {
   user: {
@@ -34,6 +34,7 @@ interface HeaderProps {
     email: string;
     role: "admin" | "agent" | "employee";
   };
+  notificationCount?: number;
 }
 
 const navigationItems = {
@@ -41,8 +42,10 @@ const navigationItems = {
     { name: "Dashboard", href: "/admin/dashboard", icon: Home },
     { name: "Companies", href: "/admin/companies", icon: Building2 },
     { name: "Users", href: "/admin/users", icon: Users },
+    { name: "Products", href: "/admin/products", icon: Package },
     { name: "Orders", href: "/admin/orders", icon: Package },
     { name: "Approvals", href: "/admin/approvals", icon: UserCheck },
+    { name: "Payments", href: "/admin/payments", icon: DollarSign },
     { name: "Reports", href: "/admin/reports", icon: BarChart3 },
   ],
   agent: [
@@ -67,12 +70,15 @@ export function Header({ user }: HeaderProps) {
   useEffect(() => {
     if (user?.uid) {
       loadNotificationCount();
+      // Refresh notification count every 30 seconds
+      const interval = setInterval(loadNotificationCount, 30000);
+      return () => clearInterval(interval);
     }
   }, [user]);
 
   const loadNotificationCount = async () => {
     try {
-      const count = await getUnreadNotificationCount(user.uid);
+      const count = 2;
       setNotificationCount(count);
     } catch (error) {
       console.error("Error loading notification count:", error);

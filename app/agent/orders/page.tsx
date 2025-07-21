@@ -7,13 +7,28 @@ import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { Header } from "@/components/layout/header";
-import { Package, Search, Calendar, Clock, Eye } from "lucide-react";
-import { getOrdersAssignedToAgent, type Order } from "@/lib/orders";
+import { Package, Search, Eye, Calendar, Truck } from "lucide-react";
+import {
+  getOrdersAssignedToAgent,
+  markOrderAsDelivered,
+  type Order,
+} from "@/lib/orders";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Link from "next/link";
+import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { format } from "date-fns";
 
 export default function AgentOrdersPage() {
   const [user, setUser] = useState<any>(null);
@@ -22,27 +37,22 @@ export default function AgentOrdersPage() {
   const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState("all");
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [isDelivering, setIsDelivering] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        try {
-          const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
-          if (userDoc.exists()) {
-            const userData = userDoc.data();
-            if (userData.role !== "agent") {
-              router.push("/");
-              return;
-            }
-            setUser({ ...firebaseUser, ...userData });
-            await loadOrders(firebaseUser.uid);
-          } else {
-            router.push("/auth/login");
+        const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          if (userData.role !== "agent") {
+            router.push("/");
+            return;
           }
-        } catch (error) {
-          console.error("Error loading user data:", error);
-          router.push("/auth/login");
+          setUser({ ...firebaseUser, ...userData });
+          await loadOrders(firebaseUser.uid);
         }
       } else {
         router.push("/auth/login");
@@ -60,6 +70,7 @@ export default function AgentOrdersPage() {
       setFilteredOrders(ordersData);
     } catch (error) {
       console.error("Error loading orders:", error);
+      toast.error("Failed to load orders");
     }
   };
 
@@ -90,7 +101,7 @@ export default function AgentOrdersPage() {
             .toLowerCase()
             .includes(searchTerm.toLowerCase()) ||
           order.products.some((product) =>
-            product.name.toLowerCase().includes(searchTerm.toLowerCase())
+            product.productName.toLowerCase().includes(searchTerm.toLowerCase())
           )
       );
     }
@@ -98,18 +109,53 @@ export default function AgentOrdersPage() {
     setFilteredOrders(filtered);
   };
 
+  const handleMarkAsDelivered = async () => {
+    if (!selectedOrder || !user) return;
+
+    setIsDelivering(true);
+    try {
+      await markOrderAsDelivered(selectedOrder.id, user.uid);
+      await loadOrders(user.uid);
+      toast.success("Order marked as delivered successfully");
+      setSelectedOrder(null);
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setIsDelivering(false);
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case "pending":
         return "bg-yellow-100 text-yellow-800";
-      case "processing":
+      case "in_progress":
         return "bg-blue-100 text-blue-800";
+      case "ready_for_review":
+        return "bg-purple-100 text-purple-800";
       case "completed":
         return "bg-green-100 text-green-800";
-      case "cancelled":
-        return "bg-red-100 text-red-800";
       case "delivered":
+        return "bg-gray-100 text-gray-800";
+      default:
+        return "bg-gray-100 text-gray-800";
+    }
+  };
+
+  const getProductStatusColor = (status: string) => {
+    switch (status) {
+      case "pending":
+        return "bg-yellow-100 text-yellow-800";
+      case "assigned":
+        return "bg-blue-100 text-blue-800";
+      case "in_progress":
+        return "bg-indigo-100 text-indigo-800";
+      case "ready_for_review":
         return "bg-purple-100 text-purple-800";
+      case "completed":
+        return "bg-green-100 text-green-800";
+      case "delivered":
+        return "bg-gray-100 text-gray-800";
       default:
         return "bg-gray-100 text-gray-800";
     }
@@ -133,31 +179,22 @@ export default function AgentOrdersPage() {
   const orderCounts = {
     all: orders.length,
     pending: orders.filter((o) => o.status === "pending").length,
-    processing: orders.filter((o) => o.status === "processing").length,
+    in_progress: orders.filter((o) => o.status === "in_progress").length,
     completed: orders.filter((o) => o.status === "completed").length,
     delivered: orders.filter((o) => o.status === "delivered").length,
-    cancelled: orders.filter((o) => o.status === "cancelled").length,
   };
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header user={user} notificationCount={3} />
-
+      <Header user={user} />
       <main className="container mx-auto px-6 py-8">
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">My Orders</h1>
             <p className="text-gray-600">
-              Orders assigned to you and your team
+              Orders assigned to you for management
             </p>
           </div>
-          {/* Agents can't create orders directly, only assignments */}
-          {/* <Link href="/agent/orders/new">
-            <Button className="bg-blue-600 hover:bg-blue-700">
-              <Plus className="mr-2 h-4 w-4" />
-              New Order
-            </Button>
-          </Link> */}
         </div>
 
         {/* Search */}
@@ -166,7 +203,7 @@ export default function AgentOrdersPage() {
             <div className="relative">
               <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
               <Input
-                placeholder="Search orders by number, client, or product..."
+                placeholder="Search orders by number, company, or product..."
                 value={searchTerm}
                 onChange={(e) => handleSearch(e.target.value)}
                 className="pl-10 bg-white"
@@ -195,10 +232,10 @@ export default function AgentOrdersPage() {
               Pending ({orderCounts.pending})
             </TabsTrigger>
             <TabsTrigger
-              value="processing"
+              value="in_progress"
               className="data-[state=active]:bg-blue-600 data-[state=active]:text-white"
             >
-              Processing ({orderCounts.processing})
+              In Progress ({orderCounts.in_progress})
             </TabsTrigger>
             <TabsTrigger
               value="completed"
@@ -224,18 +261,18 @@ export default function AgentOrdersPage() {
                     className="hover:shadow-lg transition-shadow"
                   >
                     <CardContent className="p-6">
-                      <div className="flex items-start justify-between">
+                      <div className="flex items-start justify-between mb-4">
                         <div className="flex-1">
                           <div className="flex items-center gap-3 mb-2">
                             <h3 className="text-lg font-semibold text-gray-900">
-                              Order: {order.orderNumber}
+                              {order.orderNumber}
                             </h3>
                             <Badge className={getStatusColor(order.status)}>
                               {order.status.replace("_", " ").toUpperCase()}
                             </Badge>
                           </div>
 
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
                             <div>
                               <p className="text-sm font-medium text-gray-600">
                                 Client
@@ -246,51 +283,108 @@ export default function AgentOrdersPage() {
                             </div>
                             <div>
                               <p className="text-sm font-medium text-gray-600">
-                                Due Date
+                                Total Quantity
                               </p>
                               <p className="text-sm text-gray-900">
-                                {order.dueDate.toLocaleDateString()}
+                                {order.totalQuantity}
                               </p>
                             </div>
                             <div>
                               <p className="text-sm font-medium text-gray-600">
-                                Products
+                                Order Value
                               </p>
                               <p className="text-sm text-gray-900">
-                                {order.products.length} item
-                                {order.products.length !== 1 ? "s" : ""}
+                                ${order.totalValue?.toFixed(2) || "0.00"}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-gray-600">
+                                Due Date
+                              </p>
+                              <p className="text-sm text-gray-900">
+                                {format(order.dueDate, "MMM dd, yyyy")}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-gray-600">
+                                Delivery Date
+                              </p>
+                              <p className="text-sm text-gray-900">
+                                {format(order.deliveryDate, "MMM dd, yyyy")}
                               </p>
                             </div>
                           </div>
 
+                          {/* Products */}
                           <div className="mb-4">
-                            <p className="text-sm font-medium text-gray-600 mb-1">
-                              Notes
+                            <p className="text-sm font-medium text-gray-600 mb-2">
+                              Products
                             </p>
-                            <p className="text-sm text-gray-700 line-clamp-2">
-                              {order.notes || "N/A"}
-                            </p>
+                            <div className="space-y-2">
+                              {order.products.map((product, index) => (
+                                <div
+                                  key={index}
+                                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                                >
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2">
+                                      <p className="font-medium text-gray-900">
+                                        {product.productName}
+                                      </p>
+                                      <Badge
+                                        className={getProductStatusColor(
+                                          product.status
+                                        )}
+                                        variant="outline"
+                                      >
+                                        {product.status
+                                          .replace("_", " ")
+                                          .toUpperCase()}
+                                      </Badge>
+                                    </div>
+                                    <p className="text-sm text-gray-600">
+                                      Qty: {product.quantity} • $
+                                      {product.totalPrice?.toFixed(2)}
+                                    </p>
+                                    <p className="text-sm text-gray-600 line-clamp-1">
+                                      {product.specifications}
+                                    </p>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="text-sm text-gray-600">
+                                      Deadline
+                                    </p>
+                                    <p className="text-sm text-gray-900">
+                                      {format(product.deadline, "MMM dd, yyyy")}
+                                    </p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
                           </div>
 
                           <div className="flex items-center gap-4 text-xs text-gray-500">
                             <div className="flex items-center gap-1">
                               <Calendar className="h-3 w-3" />
                               <span>
-                                Created: {order.createdAt.toLocaleDateString()}
+                                Created:{" "}
+                                {format(order.createdAt, "MMM dd, yyyy")}
                               </span>
                             </div>
-                            <div className="flex items-center gap-1">
-                              <Clock className="h-3 w-3" />
-                              <span>
-                                Last Updated:{" "}
-                                {order.updatedAt.toLocaleDateString()}
-                              </span>
-                            </div>
+                            {order.deliveredAt && (
+                              <div className="flex items-center gap-1">
+                                <Truck className="h-3 w-3" />
+                                <span>
+                                  Delivered:{" "}
+                                  {format(order.deliveredAt, "MMM dd, yyyy")}
+                                </span>
+                              </div>
+                            )}
                           </div>
                         </div>
 
-                        <div className="flex gap-2 ml-4">
-                          <Link href={`/agent/orders/${order.id}`}>
+                        <div className="flex flex-col gap-2 ml-4">
+                          <Link href={`/admin/orders/${order.id}`}>
                             <Button
                               variant="outline"
                               size="sm"
@@ -299,6 +393,49 @@ export default function AgentOrdersPage() {
                               <Eye className="h-4 w-4" />
                             </Button>
                           </Link>
+                          {order.status === "completed" && (
+                            <Dialog>
+                              <DialogTrigger asChild>
+                                <Button
+                                  onClick={() => setSelectedOrder(order)}
+                                  className="bg-green-600 hover:bg-green-700"
+                                  size="sm"
+                                >
+                                  <Truck className="h-4 w-4 mr-1" />
+                                  Deliver
+                                </Button>
+                              </DialogTrigger>
+                              <DialogContent className="bg-white">
+                                <DialogHeader>
+                                  <DialogTitle>
+                                    Mark Order as Delivered
+                                  </DialogTitle>
+                                  <DialogDescription>
+                                    Are you sure you want to mark order{" "}
+                                    {order.orderNumber} as delivered to{" "}
+                                    {order.clientCompanyName}?
+                                  </DialogDescription>
+                                </DialogHeader>
+                                <DialogFooter>
+                                  <Button
+                                    variant="outline"
+                                    onClick={() => setSelectedOrder(null)}
+                                  >
+                                    Cancel
+                                  </Button>
+                                  <Button
+                                    onClick={handleMarkAsDelivered}
+                                    disabled={isDelivering}
+                                    className="bg-green-600 hover:bg-green-700"
+                                  >
+                                    {isDelivering
+                                      ? "Delivering..."
+                                      : "Mark as Delivered"}
+                                  </Button>
+                                </DialogFooter>
+                              </DialogContent>
+                            </Dialog>
+                          )}
                         </div>
                       </div>
                     </CardContent>
@@ -311,10 +448,10 @@ export default function AgentOrdersPage() {
                     <h3 className="text-lg font-medium text-gray-900 mb-2">
                       No orders found
                     </h3>
-                    <p className="text-gray-600 mb-4">
+                    <p className="text-gray-600">
                       {searchTerm
                         ? "No orders match your search criteria."
-                        : "No orders have been assigned to you or your team yet."}
+                        : "You don't have any orders assigned yet."}
                     </p>
                   </CardContent>
                 </Card>

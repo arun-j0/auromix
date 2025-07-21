@@ -17,6 +17,8 @@ import {
   Clock,
   Play,
   CheckCircle,
+  Package,
+  User,
 } from "lucide-react";
 import {
   getAssignmentsByEmployee,
@@ -34,7 +36,8 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
+import { format } from "date-fns";
 
 export default function EmployeeTasksPage() {
   const [user, setUser] = useState<any>(null);
@@ -52,7 +55,6 @@ export default function EmployeeTasksPage() {
     useState<Assignment | null>(null);
   const [completionNotes, setCompletionNotes] = useState("");
   const router = useRouter();
-  const { toast } = useToast();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -93,11 +95,7 @@ export default function EmployeeTasksPage() {
       setAssignments(assignmentsData);
     } catch (error) {
       console.error("Error loading assignments:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load tasks. Please try again.",
-        variant: "destructive",
-      });
+      toast.error("Failed to load tasks. Please try again.");
     }
   };
 
@@ -177,17 +175,10 @@ export default function EmployeeTasksPage() {
     try {
       await startAssignment(assignmentId);
       await loadAssignments(user.uid); // Reload assignments
-      toast({
-        title: "Task Started",
-        description: "Assignment status updated to In Progress.",
-      });
+      toast.success("Task started successfully!");
     } catch (error) {
       console.error("Error starting task:", error);
-      toast({
-        title: "Error",
-        description: "Failed to start task. Please try again.",
-        variant: "destructive",
-      });
+      toast.error("Failed to start task. Please try again.");
     }
   };
 
@@ -198,22 +189,24 @@ export default function EmployeeTasksPage() {
     try {
       await completeAssignment(selectedAssignment.id, completionNotes);
       await loadAssignments(user.uid); // Reload assignments
-      toast({
-        title: "Task Completed",
-        description: "Assignment status updated to Completed.",
-      });
+      toast.success("Task completed successfully!");
       setSelectedAssignment(null);
       setCompletionNotes("");
     } catch (error) {
       console.error("Error completing task:", error);
-      toast({
-        title: "Error",
-        description: "Failed to complete task. Please try again.",
-        variant: "destructive",
-      });
+      toast.error("Failed to complete task. Please try again.");
     } finally {
       setIsCompleting(false);
     }
+  };
+
+  const isOverdue = (deadline: Date, status: string) => {
+    return (
+      (status === "approved" ||
+        status === "in_progress" ||
+        status === "pending") &&
+      deadline < new Date()
+    );
   };
 
   if (loading) {
@@ -239,21 +232,12 @@ export default function EmployeeTasksPage() {
     in_progress: assignments.filter((a) => a.status === "in_progress").length,
     completed: assignments.filter((a) => a.status === "completed").length,
     rejected: assignments.filter((a) => a.status === "rejected").length,
-    overdue: assignments.filter((a) => {
-      const deadline = a.deadline;
-      return (
-        (a.status === "approved" ||
-          a.status === "in_progress" ||
-          a.status === "pending") &&
-        deadline < new Date()
-      );
-    }).length,
+    overdue: assignments.filter((a) => isOverdue(a.deadline, a.status)).length,
   };
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header user={user} notificationCount={3} />
-
+      <Header user={user} />
       <main className="container mx-auto px-6 py-8">
         <div className="flex justify-between items-center mb-8">
           <div>
@@ -283,7 +267,7 @@ export default function EmployeeTasksPage() {
           onValueChange={handleTabChange}
           className="mb-6"
         >
-          <TabsList className="grid w-full grid-cols-5 bg-white">
+          <TabsList className="grid w-full grid-cols-6 bg-white">
             <TabsTrigger
               value="all"
               className="data-[state=active]:bg-blue-600 data-[state=active]:text-white"
@@ -309,8 +293,14 @@ export default function EmployeeTasksPage() {
               Completed ({taskCounts.completed})
             </TabsTrigger>
             <TabsTrigger
-              value="overdue"
+              value="rejected"
               className="data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+            >
+              Rejected ({taskCounts.rejected})
+            </TabsTrigger>
+            <TabsTrigger
+              value="overdue"
+              className="data-[state=active]:bg-red-600 data-[state=active]:text-white"
             >
               Overdue ({taskCounts.overdue})
             </TabsTrigger>
@@ -323,12 +313,17 @@ export default function EmployeeTasksPage() {
                 filteredAssignments.map((assignment) => (
                   <Card
                     key={assignment.id}
-                    className="hover:shadow-lg transition-shadow"
+                    className={`hover:shadow-lg transition-shadow ${
+                      isOverdue(assignment.deadline, assignment.status)
+                        ? "border-red-200 bg-red-50"
+                        : ""
+                    }`}
                   >
                     <CardContent className="p-6">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-2">
+                          <div className="flex items-center gap-3 mb-3">
+                            <Package className="h-5 w-5 text-gray-500" />
                             <h3 className="text-lg font-semibold text-gray-900">
                               {assignment.productName}
                             </h3>
@@ -339,12 +334,16 @@ export default function EmployeeTasksPage() {
                                 .replace("_", " ")
                                 .toUpperCase()}
                             </Badge>
+                            {isOverdue(
+                              assignment.deadline,
+                              assignment.status
+                            ) && <Badge variant="destructive">OVERDUE</Badge>}
                           </div>
 
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
                             <div>
                               <p className="text-sm font-medium text-gray-600">
-                                Order
+                                Order Number
                               </p>
                               <p className="text-sm text-gray-900">
                                 {assignment.orderNumber}
@@ -354,9 +353,12 @@ export default function EmployeeTasksPage() {
                               <p className="text-sm font-medium text-gray-600">
                                 Assigned By
                               </p>
-                              <p className="text-sm text-gray-900">
-                                {assignment.assignedByName}
-                              </p>
+                              <div className="flex items-center gap-1">
+                                <User className="h-3 w-3 text-gray-500" />
+                                <p className="text-sm text-gray-900">
+                                  {assignment.agentName}
+                                </p>
+                              </div>
                             </div>
                             <div>
                               <p className="text-sm font-medium text-gray-600">
@@ -370,27 +372,55 @@ export default function EmployeeTasksPage() {
                               <p className="text-sm font-medium text-gray-600">
                                 Deadline
                               </p>
-                              <p className="text-sm text-gray-900">
-                                {assignment.deadline.toLocaleDateString()}
+                              <p
+                                className={`text-sm font-medium ${
+                                  isOverdue(
+                                    assignment.deadline,
+                                    assignment.status
+                                  )
+                                    ? "text-red-600"
+                                    : "text-gray-900"
+                                }`}
+                              >
+                                {format(
+                                  assignment.deadline,
+                                  "MMM dd, yyyy 'at' HH:mm"
+                                )}
                               </p>
                             </div>
                           </div>
 
                           <div className="mb-4">
-                            <p className="text-sm font-medium text-gray-600 mb-1">
-                              Specifications
+                            <p className="text-sm font-medium text-gray-600 mb-2">
+                              Product Specifications
                             </p>
-                            <p className="text-sm text-gray-700 line-clamp-2">
-                              {assignment.productSpecs}
-                            </p>
+                            <div className="bg-gray-50 p-3 rounded-lg">
+                              <p className="text-sm text-gray-700">
+                                {assignment.productSpecs}
+                              </p>
+                            </div>
                           </div>
+
+                          {assignment.notes &&
+                            assignment.status !== "completed" && (
+                              <div className="mb-4">
+                                <p className="text-sm font-medium text-gray-600 mb-2">
+                                  Assignment Notes
+                                </p>
+                                <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                                  <p className="text-sm text-blue-800">
+                                    {assignment.notes}
+                                  </p>
+                                </div>
+                              </div>
+                            )}
 
                           <div className="flex items-center gap-4 text-xs text-gray-500">
                             <div className="flex items-center gap-1">
                               <Calendar className="h-3 w-3" />
                               <span>
                                 Assigned:{" "}
-                                {assignment.createdAt.toLocaleDateString()}
+                                {format(assignment.createdAt, "MMM dd, yyyy")}
                               </span>
                             </div>
                             {assignment.startedAt && (
@@ -398,20 +428,24 @@ export default function EmployeeTasksPage() {
                                 <Clock className="h-3 w-3" />
                                 <span>
                                   Started:{" "}
-                                  {assignment.startedAt.toLocaleDateString()}
+                                  {format(assignment.startedAt, "MMM dd, yyyy")}
                                 </span>
                               </div>
                             )}
                             {assignment.completedAt && (
                               <div className="flex items-center gap-1">
-                                <Clock className="h-3 w-3" />
+                                <CheckCircle className="h-3 w-3" />
                                 <span>
                                   Completed:{" "}
-                                  {assignment.completedAt.toLocaleDateString()}
+                                  {format(
+                                    assignment.completedAt,
+                                    "MMM dd, yyyy"
+                                  )}
                                 </span>
                               </div>
                             )}
                           </div>
+
                           {assignment.rejectionReason && (
                             <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
                               <p className="text-sm text-red-800">
@@ -420,10 +454,11 @@ export default function EmployeeTasksPage() {
                               </p>
                             </div>
                           )}
+
                           {assignment.notes &&
                             assignment.status === "completed" && (
-                              <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                                <p className="text-sm text-blue-800">
+                              <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                                <p className="text-sm text-green-800">
                                   <strong>Completion Notes:</strong>{" "}
                                   {assignment.notes}
                                 </p>
@@ -437,20 +472,22 @@ export default function EmployeeTasksPage() {
                             <Button
                               variant="outline"
                               size="sm"
-                              className="bg-green-500 text-white hover:bg-green-600"
+                              className="bg-green-500 text-white hover:bg-green-600 border-green-500"
                               onClick={() => handleStartTask(assignment.id)}
                             >
-                              <Play className="h-4 w-4" />
+                              <Play className="h-4 w-4 mr-1" />
+                              Start
                             </Button>
                           )}
                           {assignment.status === "in_progress" && (
                             <Button
                               variant="outline"
                               size="sm"
-                              className="bg-purple-500 text-white hover:bg-purple-600"
+                              className="bg-purple-500 text-white hover:bg-purple-600 border-purple-500"
                               onClick={() => setSelectedAssignment(assignment)}
                             >
-                              <CheckCircle className="h-4 w-4" />
+                              <CheckCircle className="h-4 w-4 mr-1" />
+                              Complete
                             </Button>
                           )}
                         </div>
@@ -484,43 +521,55 @@ export default function EmployeeTasksPage() {
           open={!!selectedAssignment}
           onOpenChange={() => setSelectedAssignment(null)}
         >
-          <DialogContent className="sm:max-w-[425px]">
+          <DialogContent className="sm:max-w-[500px] bg-white">
             <DialogHeader>
               <DialogTitle>Complete Task</DialogTitle>
             </DialogHeader>
             <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="productName" className="text-right">
-                  Product
-                </Label>
+              <div className="space-y-2">
+                <Label htmlFor="productName">Product</Label>
                 <Input
                   id="productName"
                   value={selectedAssignment.productName}
-                  className="col-span-3"
+                  className="bg-gray-50"
                   readOnly
                 />
               </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="orderNumber" className="text-right">
-                  Order
-                </Label>
+              <div className="space-y-2">
+                <Label htmlFor="orderNumber">Order Number</Label>
                 <Input
                   id="orderNumber"
                   value={selectedAssignment.orderNumber}
-                  className="col-span-3"
+                  className="bg-gray-50"
                   readOnly
                 />
               </div>
-              <div className="grid grid-cols-4 items-start gap-4">
-                <Label htmlFor="notes" className="text-right">
-                  Notes
-                </Label>
+              <div className="space-y-2">
+                <Label htmlFor="quantity">Quantity</Label>
+                <Input
+                  id="quantity"
+                  value={selectedAssignment.quantity.toString()}
+                  className="bg-gray-50"
+                  readOnly
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="specs">Specifications</Label>
+                <Textarea
+                  id="specs"
+                  value={selectedAssignment.productSpecs}
+                  className="bg-gray-50 min-h-[80px]"
+                  readOnly
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="notes">Completion Notes (Optional)</Label>
                 <Textarea
                   id="notes"
-                  placeholder="Add any completion notes here..."
+                  placeholder="Add any notes about the completed work, issues encountered, or additional information..."
                   value={completionNotes}
                   onChange={(e) => setCompletionNotes(e.target.value)}
-                  className="col-span-3"
+                  className="min-h-[100px]"
                 />
               </div>
             </div>
@@ -531,7 +580,11 @@ export default function EmployeeTasksPage() {
               >
                 Cancel
               </Button>
-              <Button onClick={handleCompleteTask} disabled={isCompleting}>
+              <Button
+                onClick={handleCompleteTask}
+                disabled={isCompleting}
+                className="bg-purple-600 hover:bg-purple-700"
+              >
                 {isCompleting ? "Completing..." : "Mark as Completed"}
               </Button>
             </DialogFooter>

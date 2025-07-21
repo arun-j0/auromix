@@ -25,9 +25,8 @@ import {
   markNotificationAsRead,
   type Notification,
 } from "@/lib/notifications";
-import Link from "next/link";
 
-export default function AdminNotificationsPage() {
+export default function AgentNotificationsPage() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -39,7 +38,7 @@ export default function AdminNotificationsPage() {
         const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
         if (userDoc.exists()) {
           const userData = userDoc.data();
-          if (userData.role !== "admin") {
+          if (userData.role !== "agent") {
             router.push("/");
             return;
           }
@@ -57,9 +56,7 @@ export default function AdminNotificationsPage() {
 
   const loadNotifications = async (userId: string) => {
     try {
-      console.log("Loading notifications for user:", userId);
       const notificationsData = await getUserNotifications(userId);
-      console.log("Loaded notifications:", notificationsData);
       setNotifications(notificationsData);
     } catch (error) {
       console.error("Error loading notifications:", error);
@@ -114,9 +111,15 @@ export default function AdminNotificationsPage() {
   const getPriorityLevel = (notification: Notification) => {
     if (
       notification.type === "assignment" &&
-      notification.message.includes("Pending Approval")
+      notification.message.includes("rejected")
     ) {
       return "high";
+    }
+    if (
+      notification.type === "assignment" &&
+      notification.message.includes("approved")
+    ) {
+      return "medium";
     }
     if (
       notification.type === "assignment" &&
@@ -125,23 +128,6 @@ export default function AdminNotificationsPage() {
       return "medium";
     }
     return "normal";
-  };
-
-  const getActionButton = (notification: Notification) => {
-    if (
-      notification.type === "assignment" &&
-      notification.message.includes("Pending Approval")
-    ) {
-      return (
-        <Link href="/admin/approvals">
-          <Button size="sm" className="bg-blue-600 hover:bg-blue-700">
-            <ClipboardList className="h-4 w-4 mr-2" />
-            Review
-          </Button>
-        </Link>
-      );
-    }
-    return null;
   };
 
   if (loading) {
@@ -172,7 +158,7 @@ export default function AdminNotificationsPage() {
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Notifications</h1>
             <p className="text-gray-600">
-              Stay updated with system activities and approvals
+              Stay updated with your assignments and orders
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -191,20 +177,12 @@ export default function AdminNotificationsPage() {
         {highPriorityCount > 0 && (
           <Card className="mb-6 border-red-200 bg-red-50">
             <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-red-800">
-                  <AlertCircle className="h-5 w-5" />
-                  <span className="font-medium">
-                    You have {highPriorityCount} urgent notification
-                    {highPriorityCount > 1 ? "s" : ""} requiring immediate
-                    attention
-                  </span>
-                </div>
-                <Link href="/admin/approvals">
-                  <Button size="sm" className="bg-red-600 hover:bg-red-700">
-                    Review Now
-                  </Button>
-                </Link>
+              <div className="flex items-center gap-2 text-red-800">
+                <AlertCircle className="h-5 w-5" />
+                <span className="font-medium">
+                  You have {highPriorityCount} urgent notification
+                  {highPriorityCount > 1 ? "s" : ""} requiring attention
+                </span>
               </div>
             </CardContent>
           </Card>
@@ -218,7 +196,6 @@ export default function AdminNotificationsPage() {
               notification.isRead
             );
             const priority = getPriorityLevel(notification);
-            const actionButton = getActionButton(notification);
 
             return (
               <Card
@@ -281,20 +258,17 @@ export default function AdminNotificationsPage() {
                         </div>
                       </div>
                     </div>
-                    <div className="flex flex-col gap-2">
-                      {actionButton}
-                      {!notification.isRead && (
-                        <Button
-                          onClick={() => handleMarkAsRead(notification.id)}
-                          variant="outline"
-                          size="sm"
-                          className="bg-white"
-                        >
-                          <CheckCircle className="h-4 w-4 mr-2" />
-                          Mark Read
-                        </Button>
-                      )}
-                    </div>
+                    {!notification.isRead && (
+                      <Button
+                        onClick={() => handleMarkAsRead(notification.id)}
+                        variant="outline"
+                        size="sm"
+                        className="bg-white"
+                      >
+                        <CheckCircle className="h-4 w-4 mr-2" />
+                        Mark Read
+                      </Button>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -307,25 +281,12 @@ export default function AdminNotificationsPage() {
             <CardContent className="p-12 text-center">
               <Bell className="mx-auto h-12 w-12 text-gray-400 mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">
-                No notifications yet
+                No notifications
               </h3>
-              <p className="text-gray-600 mb-4">
-                New notifications will appear here when assignments are created,
-                completed, or require approval.
+              <p className="text-gray-600">
+                You're all caught up! New notifications will appear here when
+                assignments are updated.
               </p>
-              <div className="flex gap-2 justify-center">
-                <Link href="/admin/approvals">
-                  <Button variant="outline" className="bg-white">
-                    <ClipboardList className="mr-2 h-4 w-4" />
-                    Check Approvals
-                  </Button>
-                </Link>
-                <Link href="/admin/dashboard">
-                  <Button className="bg-blue-600 hover:bg-blue-700">
-                    Back to Dashboard
-                  </Button>
-                </Link>
-              </div>
             </CardContent>
           </Card>
         )}
